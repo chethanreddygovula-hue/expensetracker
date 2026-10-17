@@ -1,0 +1,22 @@
+{
+  "monthly_budget": "20000.00",
+  "next_id": 3,
+  "expenses": [
+    {
+      "id": 1,
+      "title": "rent",
+      "amount": "5000.00",
+      "category": "Other",
+      "date": "2026-10-14",
+      "notes": ""
+    },
+    {
+      "id": 2,
+      "title": "food",
+      "amount": "450.00",
+      "category": "Food",
+      "date": "2026-10-14",
+      "notes": ""
+    }
+  ]
+}

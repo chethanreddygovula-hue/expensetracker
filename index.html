@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expenses</title>
+<style>
+  :root {
+    --bg: #e9eef0; --surface: #ffffff; --ink: #16222b; --muted: #5b6b76;
+    --line: #cbd5da; --accent: #1f5f5b; --accent-ink: #ffffff; --danger: #a8261e; --track: #d6dfe3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11191e; --surface: #18232a; --ink: #e6edf0; --muted: #95a6b0;
+      --line: #2b3a43; --accent: #5fb3ab; --accent-ink: #0c1a19; --danger: #ff8a80; --track: #263540;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px clamp(16px, 4vw, 40px) 48px;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+  h2 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 650; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; max-width: 1100px; margin: 0 auto 16px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .label { display: block; font-size: 0.85rem; color: var(--muted); }
+  input, select, button { font: inherit; color: inherit; }
+  input, select {
+    width: 100%; padding: 8px 10px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button {
+    padding: 8px 14px; border: 1px solid var(--accent); border-radius: 4px;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer;
+  }
+  button.quiet { background: transparent; color: var(--accent); }
+  button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+  button.small { padding: 3px 9px; font-size: 0.85rem; }
+
+  #msg { min-height: 1.5em; margin: 0 auto 8px; max-width: 1100px; font-weight: 600; color: var(--accent); }
+  #msg.error { color: var(--danger); }
+
+  .budget { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .figures { display: flex; gap: 32px; flex-wrap: wrap; margin-bottom: 14px; }
+  .figures strong { font-size: 1.8rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .bar { height: 16px; background: var(--track); border-radius: 8px; overflow: hidden; }
+  #fill { height: 100%; width: 0; background: var(--accent); }
+  #fill.over { background: var(--danger); }
+  @media (prefers-reduced-motion: no-preference) { #fill { transition: width 0.4s ease; } }
+  .budget-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; justify-content: space-between; margin-top: 16px; }
+  #budget-form { display: flex; gap: 8px; max-width: 280px; }
+  .cats { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 220px; }
+  .cats li { display: grid; grid-template-columns: 110px 1fr 72px; gap: 10px; align-items: center; font-size: 0.9rem; }
+  .cats .mini { height: 6px; background: var(--track); border-radius: 3px; }
+  .cats .mini span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .grid { display: grid; gap: 24px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 300px 1fr; } }
+  form.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 12px; }
+  .actions { display: flex; gap: 8px; }
+  .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; align-items: end; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+  th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  td .note { display: block; font-size: 0.85rem; color: var(--muted); }
+  td.row-actions { white-space: nowrap; text-align: right; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .empty { padding: 28px 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Expenses</h1>
+  <label>Month <input type="month" id="month" style="width:auto"></label>
+</header>
+<p id="msg" role="status"></p>
+
+<div class="wrap">
+  <section class="budget" aria-label="Monthly budget">
+    <div class="figures">
+      <div><span class="label">Spent this month</span><strong id="spent">0.00</strong></div>
+      <div><span class="label">Monthly budget</span><strong id="budget">Not set</strong></div>
+      <div><span class="label" id="remaining-label">Remaining</span><strong id="remaining">-</strong></div>
+    </div>
+    <div class="bar"><div id="fill"></div></div>
+    <div class="budget-row">
+      <form id="budget-form">
+        <input id="budget-input" inputmode="decimal" placeholder="Budget, e.g. 500" aria-label="Monthly budget amount">
+        <button type="submit">Set budget</button>
+      </form>
+      <ul class="cats" id="cats" aria-label="Spending by category"></ul>
+    </div>
+  </section>
+
+  <div class="grid">
+    <form class="panel" id="expense-form">
+      <h2 id="form-title">Add expense</h2>
+      <label>Title <input id="title" required maxlength="60"></label>
+      <label>Amount <input id="amount" inputmode="decimal" required placeholder="12.50"></label>
+      <label>Category
+        <input id="category" list="category-list" required maxlength="30">
+        <datalist id="category-list">
+          <option value="Food"><option value="Travel"><option value="Education"><option value="Shopping"><option value="Other">
+        </datalist>
+      </label>
+      <label>Date <input type="date" id="date" required></label>
+      <label>Notes (optional) <input id="notes" maxlength="200"></label>
+      <div class="actions">
+        <button type="submit" id="submit-btn">Add expense</button>
+        <button type="button" class="quiet" id="cancel-btn" hidden>Cancel</button>
+      </div>
+    </form>
+
+    <section>
+      <div class="filters">
+        <label>Category <input id="f-category" placeholder="All"></label>
+        <label>From <input type="date" id="f-start"></label>
+        <label>To <input type="date" id="f-end"></label>
+        <button type="button" class="quiet" id="f-clear">Clear filters</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Title</th><th>Category</th><th class="num">Amount</th><th><span class="sr">Actions</span></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden>No expenses match. Add one with the form.</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  const $ = (selector) => document.querySelector(selector);
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  let editingId = null;
+  const loaded = new Map();
+  let messageTimer;
+
+  function say(text, isError = false) {
+    const box = $("#msg");
+    box.textContent = text;
+    box.className = isError ? "error" : "";
+    clearTimeout(messageTimer);
+    if (!isError) messageTimer = setTimeout(() => (box.textContent = ""), 3500);
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Something went wrong. Try again.");
+    return data;
+  }
+
+  function cell(tag, text, className) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+  }
+
+  function actionButton(label, className, onClick) {
+    const btn = cell("button", label, `small ${className}`);
+    btn.type = "button";
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  async function loadExpenses() {
+    const params = new URLSearchParams();
+    if ($("#f-category").value.trim()) params.set("category", $("#f-category").value.trim());
+    if ($("#f-start").value) params.set("start", $("#f-start").value);
+    if ($("#f-end").value && $("#f-start").value) params.set("end", $("#f-end").value);
+    const expenses = await api(`/api/expenses?${params}`);
+
+    loaded.clear();
+    const body = $("#rows");
+    body.replaceChildren();
+    $("#empty").hidden = expenses.length > 0;
+    for (const e of expenses) {
+      loaded.set(e.id, e);
+      const row = document.createElement("tr");
+      const titleCell = cell("td", e.title);
+      if (e.notes) titleCell.append(cell("span", e.notes, "note"));
+      const actions = cell("td", "", "row-actions");
+      actions.append(
+        actionButton("Edit", "quiet", () => startEdit(e.id)),
+        " ",
+        actionButton("Delete", "danger", () => removeExpense(e.id))
+      );
+      row.append(cell("td", e.date), titleCell, cell("td", e.category), cell("td", e.amount, "num"), actions);
+      body.append(row);
+    }
+  }
+
+  async function loadSummary() {
+    const month = $("#month").value || today.slice(0, 7);
+    const s = await api(`/api/summary?month=${encodeURIComponent(month)}`);
+    $("#spent").textContent = s.spent;
+    $("#budget").textContent = s.budget ?? "Not set";
+    $("#remaining").textContent = s.remaining ?? "-";
+
+    const over = s.remaining !== null && Number(s.remaining) < 0;
+    $("#remaining-label").textContent = over ? "Over budget by" : "Remaining";
+    if (over) $("#remaining").textContent = s.remaining.replace("-", "");
+    const fill = $("#fill");
+    fill.className = over ? "over" : "";
+    fill.style.width = s.budget ? `${Math.min(100, (Number(s.spent) / Number(s.budget)) * 100)}%` : "0";
+
+    const list = $("#cats");
+    list.replaceChildren();
+    const top = Math.max(0, ...Object.values(s.by_category).map(Number));
+    for (const [name, amount] of Object.entries(s.by_category)) {
+      const li = document.createElement("li");
+      const bar = document.createElement("div");
+      bar.className = "mini";
+      const inner = document.createElement("span");
+      inner.style.width = `${(Number(amount) / top) * 100}%`;
+      bar.append(inner);
+      li.append(cell("span", name), bar, cell("span", amount, "num"));
+      list.append(li);
+    }
+  }
+
+  async function refresh() {
+    try {
+      await Promise.all([loadExpenses(), loadSummary()]);
+    } catch (err) {
+      say(err.message, true);
+    }
+  }
+
+  function resetForm() {
+    editingId = null;
+    $("#expense-form").reset();
+    $("#date").value = today;
+    $("#form-title").textContent = "Add expense";
+    $("#submit-btn").textContent = "Add expense";
+    $("#cancel-btn").hidden = true;
+  }
+
+  function startEdit(id) {
+    const e = loaded.get(id);
+    editingId = id;
+    $("#title").value = e.title;
+    $("#amount").value = e.amount;
+    $("#category").value = e.category;
+    $("#date").value = e.date;
+    $("#notes").value = e.notes;
+    $("#form-title").textContent = `Edit expense ${id}`;
+    $("#submit-btn").textContent = "Save changes";
+    $("#cancel-btn").hidden = false;
+    $("#title").focus();
+  }
+
+  async function removeExpense(id) {
+    const e = loaded.get(id);
+    if (!confirm(`Delete "${e.title}" (${e.amount})? This cannot be undone.`)) return;
+    try {
+      await api(`/api/expenses/${id}`, { method: "DELETE" });
+      if (editingId === id) resetForm();
+      say("Expense deleted");
+      refresh();
+    } catch (err) {
+      say(err.message, true);
+    }
+  }
+
+  $("#expense-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      title: $("#title").value, amount: $("#amount").value, category: $("#category").value,
+      date: $("#date").value, notes: $("#notes").value,
+    };
+    try {
+      if (editingId === null) {
+        await api("/api/expenses", { method: "POST", body: JSON.stringify(payload) });
+        say("Expense added");
+      } else {
+        await api(`/api/expenses/${editingId}`, { method: "PUT", body: JSON.stringify(payload) });
+        say("Changes saved");
+      }
+      resetForm();
+      refresh();
+    } catch (err) {
+      say(err.message, true);
+    }
+  });
+
+  $("#budget-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await api("/api/budget", { method: "POST", body: JSON.stringify({ amount: $("#budget-input").value }) });
+      $("#budget-input").value = "";
+      say("Budget set");
+      loadSummary();
+    } catch (err) {
+      say(err.message, true);
+    }
+  });
+
+  $("#cancel-btn").addEventListener("click", resetForm);
+  $("#month").addEventListener("change", () => loadSummary().catch((err) => say(err.message, true)));
+  for (const id of ["#f-category", "#f-start", "#f-end"]) $(id).addEventListener("change", refresh);
+  $("#f-clear").addEventListener("click", () => {
+    for (const id of ["#f-category", "#f-start", "#f-end"]) $(id).value = "";
+    refresh();
+  });
+
+  $("#month").value = today.slice(0, 7);
+  resetForm();
+  refresh();
+</script>
+</body>
+</html>
